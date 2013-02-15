@@ -1,0 +1,12 @@
+package chattie;
+
+message Chatter {
+    required string name = 1;
+    required string id = 2;
+}
+
+message ChatMessage {
+    required Chatter sender = 1;
+    required string receiver_id = 2;
+    required string message = 3;
+}

@@ -1,4 +1,4 @@
-(ns protobufs.core
+(ns chatter.core
   (:use protobuf.core
         lamina.core
         gloss.core

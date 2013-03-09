@@ -1,4 +1,4 @@
-(ns protobufs.test.core
+(ns chatter.test.core
   (:use [protobufs.core])
   (:use [clojure.test]))
 

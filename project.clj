@@ -1,4 +1,4 @@
-(defproject chatter "0.0.1"
+(defproject chatter "0.0.2-SNAPSHOT"
   :description "Chattie chattie"
   :dependencies [[org.clojure/clojure "1.3.0"]
                  [org.clojure/tools.cli "0.2.2"]

@@ -1,11 +1,14 @@
-# protobufs
+A Chat server and client written in Clojure
 
-FIXME: write description
+Uses google protocol buffers with aleph and lamina
+to set up a TCP server and client with a very simple
+CLI.
 
-## Usage
+Build with:
+    lein jar
+    lein uberjar
 
-FIXME: write
+Test with:
+    lein test
 
-## License
-
-Copyright (C) 2013 Jonas Lindmark
+Get instructions by adding the flag --help

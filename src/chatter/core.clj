@@ -18,38 +18,33 @@
 (defn serialize [chatmessage]
   (protobuf-dump (protobuf ChatMessage chatmessage)))
 
-(defn deserialize [data]
+(defn protobuf-deserialize [data]
   (protobuf-load ChatMessage data))
 
 (defn gloss-deserialize-msg [data]
   (let [buffer (contiguous data)
         bytes (byte-array (.remaining buffer))]
     (.get buffer bytes 0 (alength bytes))
-    (deserialize bytes)))
+    (protobuf-deserialize bytes)))
 
-(defn msg-parser [callback]
-  (fn [buffer]
-    (when buffer
-      (let [msg (gloss-deserialize-msg buffer)]
-        (callback msg)))))
 
 ;; == Server ==
 
 (def broadcast-ch (channel))
 
-(defn parser [b]
+(defn deserialize [b]
   (when b
     (gloss-deserialize-msg b)))
 
 (defn server-handler [ch ci]
   (defn get-client-id [buffer]
-    (let [msg (parser buffer)]
+    (let [msg (deserialize buffer)]
       (get-in msg [:sender :id])))
   (defn setup [buffer]
     (let [client-id (get-client-id buffer)
           to-this-client (filter* #(= client-id (get % :receiver_id)) broadcast-ch)
           serialized-out (map* serialize to-this-client)
-          parsed-in-channel (map* parser ch)]
+          parsed-in-channel (map* deserialize ch)]
       (siphon parsed-in-channel broadcast-ch)
       (siphon serialized-out ch)))
   (receive ch setup))
@@ -70,10 +65,14 @@
           id (get-in msg [:sender :id])
           text (:message msg)]
       (println (str name "(id " id ") says " text))))
+  (defn msg-parser [buffer]
+      (when buffer
+        (let [msg (gloss-deserialize-msg buffer)]
+          (handle-get-message msg))))
   (let [channel (get-client-channel)]
     (on-closed channel #(println (str id " closed client")))
     (on-drained channel #(println (str id " client channel drained")))
-    (receive-all channel (msg-parser handle-get-message))
+    (receive-all channel msg-parser)
     {:channel channel :id id :name name}))
 
 (defn send-message [client message recipient_id]
@@ -91,36 +90,25 @@
     (close channel)))
 
 (defn client-prompt [host port]
-  (defn get-id []
-    (print "Your id: ")
-    (.flush *out*)
-    (read-line))
-  (defn get-name []
-    (print "Your name ")
+  (defn get-input [prompt]
+    (print prompt)
     (.flush *out*)
     (read-line))
   (defn send-messages [client]
-    (defn get-message []
-      (print "Message ('q' to quit): ")
-      (.flush *out*)
-      (read-line))
-    (defn get-id []
-      (print "Recipient id: ")
-      (.flush *out*)
-      (read-line))
-    (let [message (get-message)]
+    (let [message (get-input "Message ('q' to quit): ")]
       (if (= message "q")
         (do
           (println "Quitting")
           (close-client client))
-        (let [id (get-id)]
+        (let [id (get-input "To id: ")]
           (send-message client message id)
           (future (send-messages client))))))
-  (let [id (get-id)
-        name (get-name)
+  (let [id (get-input "Your id: ")
+        name (get-input "Your name: ")
         client (start-a-client id name host port)]
     (println "Connected")
-    (future (send-messages client))))
+    (future (send-messages client))
+    nil))
 
 (defn parse-args [args]
   (cli args

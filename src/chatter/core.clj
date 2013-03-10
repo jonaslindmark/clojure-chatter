@@ -18,22 +18,20 @@
 (defn serialize [chatmessage]
   (protobuf-dump (protobuf ChatMessage chatmessage)))
 
-(defn protobuf-deserialize [data]
-  (protobuf-load ChatMessage data))
-
-(defn gloss-deserialize-msg [data]
-  (let [buffer (contiguous data)
-        bytes (byte-array (.remaining buffer))]
-    (.get buffer bytes 0 (alength bytes))
-    (protobuf-deserialize bytes)))
-
+(defn deserialize [buffer]
+  (defn protobuf-deserialize [data]
+    (protobuf-load ChatMessage data))
+  (defn gloss-deserialize-msg [data]
+    (let [buffer (contiguous data)
+          bytes (byte-array (.remaining buffer))]
+      (.get buffer bytes 0 (alength bytes))
+      (protobuf-deserialize bytes)))
+  (when buffer
+    (gloss-deserialize-msg buffer)))
 
 ;; == Server ==
 (defn start-server [port]
   (def broadcast-ch (channel))
-  (defn deserialize [b]
-    (when b
-      (gloss-deserialize-msg b)))
   (defn server-handler [ch ci]
     (defn get-client-id [buffer]
       (let [msg (deserialize buffer)]
@@ -56,7 +54,6 @@
   (start-tcp-server server-handler {:port port :frame frame}))
 
 ;; == Client ==
-
 (defn start-a-client [id, name, host, port]
   (defn get-client-channel []
     (wait-for-result
@@ -69,9 +66,8 @@
           text (:message msg)]
       (println (str name "(id " id ") says " text))))
   (defn msg-parser [buffer]
-      (when buffer
-        (let [msg (gloss-deserialize-msg buffer)]
-          (handle-get-message msg))))
+    (let [message (deserialize buffer)]
+      (handle-get-message message)))
   (let [channel (get-client-channel)]
     (on-closed channel #(println (str id " closed client")))
     (on-drained channel #(println (str id " client channel drained")))
@@ -91,6 +87,15 @@
 (defn close-client [client]
   (let [channel (get client :channel)]
     (close channel)))
+
+;; == CLI interface ==
+(defn parse-args [args]
+  (cli args
+       ["-s" "--server" "Starts the server" :default false :flag true]
+       ["-c" "--client" "Starts a client" :default false :flag true]
+       ["-h" "--host" "Specify host" :default "127.0.0.1"]
+       ["-p" "--port" "Specify port" :default default-port]
+       ["--help" "Shows help" :flag true :default false]))
 
 (defn client-prompt [host port]
   (defn get-input [prompt]
@@ -112,14 +117,6 @@
     (println "Connected")
     (future (send-messages client))
     nil))
-
-(defn parse-args [args]
-  (cli args
-       ["-s" "--server" "Starts the server" :default false :flag true]
-       ["-c" "--client" "Starts a client" :default false :flag true]
-       ["-h" "--host" "Specify host" :default "127.0.0.1"]
-       ["-p" "--port" "Specify port" :default default-port]
-       ["--help" "Shows help" :flag true :default false]))
 
 (defn -main [& args]
   (let [[options additional instructions] (parse-args args)]

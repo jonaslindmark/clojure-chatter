@@ -29,27 +29,30 @@
 
 
 ;; == Server ==
-
-(def broadcast-ch (channel))
-
-(defn deserialize [b]
-  (when b
-    (gloss-deserialize-msg b)))
-
-(defn server-handler [ch ci]
-  (defn get-client-id [buffer]
-    (let [msg (deserialize buffer)]
-      (get-in msg [:sender :id])))
-  (defn setup [buffer]
-    (let [client-id (get-client-id buffer)
-          to-this-client (filter* #(= client-id (get % :receiver_id)) broadcast-ch)
-          serialized-out (map* serialize to-this-client)
-          parsed-in-channel (map* deserialize ch)]
-      (siphon parsed-in-channel broadcast-ch)
-      (siphon serialized-out ch)))
-  (receive ch setup))
-
 (defn start-server [port]
+  (def broadcast-ch (channel))
+  (defn deserialize [b]
+    (when b
+      (gloss-deserialize-msg b)))
+  (defn server-handler [ch ci]
+    (defn get-client-id [buffer]
+      (let [msg (deserialize buffer)]
+        (get-in msg [:sender :id])))
+    (defn setup [buffer]
+      (let [client-id (get-client-id buffer)
+            parsed-in-channel (map* deserialize ch)
+            output-channel (channel)
+            to-this-client (filter* #(= client-id (get % :receiver_id)) output-channel)
+            serialized-out (map* serialize to-this-client)]
+        (println "Client " client-id " connected to the server!")
+        (defn on-close []
+          (println "Closing bridge for " client-id)
+          (close output-channel))
+        (on-closed ch on-close)
+        (siphon parsed-in-channel broadcast-ch)
+        (siphon broadcast-ch output-channel)
+        (siphon serialized-out ch)))
+    (receive ch setup))
   (start-tcp-server server-handler {:port port :frame frame}))
 
 ;; == Client ==
